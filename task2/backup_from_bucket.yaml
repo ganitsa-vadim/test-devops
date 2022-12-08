@@ -1,0 +1,47 @@
+---
+- name: Download file from minio bucket
+  hosts: servers
+  become: yes
+
+  tasks:
+
+  - name: install pip3
+    apt: 
+      name: python3-pip 
+      state: present 
+  
+  - name: Install require modules
+    ansible.builtin.pip:
+      name:
+        - boto3>=1.18.0
+        - botocore>=1.21.0
+
+  - name: List key simple  # Получаю список файлов из указанного бакета и записываю в переменную list_result
+    amazon.aws.s3_object:
+      endpoint_url: {{ minio_url_address}}
+      bucket: {{ bucket_name }}
+      mode: list
+      aws_access_key: {{ minio_access_key }}
+      aws_secret_key: {{ minio_secret_key }}
+    register: list_result
+
+  - debug: msg={{list_result.s3_keys}}  # Вывожу на экран значение переменной list_result
+  - set_fact: backup_file="{{list_result.s3_keys[0]}}" # Записываю в переменную backup_file первый элемент из list_result. 
+                                                       # Так как данные в бакете отсортированы по дате изменения
+  - debug: msg={{backup_file}}          # Вывожу на экран значение переменной backup_file
+
+  - name: Get from minio  # В этом таске скачивается файл с бакета на машину.
+    amazon.aws.s3_object:
+      endpoint_url: {{ minio_url_address}}
+      bucket: {{ bucket_name }}
+      object: "{{backup_file}}"
+      dest: /usr/local/{{backup_file}}
+      mode: get
+      overwrite: different
+      aws_access_key: {{ minio_access_key }}
+      aws_secret_key: {{ minio_secret_key }}
+
+  - name: Download file from server # Cкачиваю файл с машины на локальную машину.
+    fetch:
+      src: /usr/local/{{backup_file}}
+      dest: /home/vadim/Desktop/DigitalOcean/ansible
